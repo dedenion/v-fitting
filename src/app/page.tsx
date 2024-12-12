@@ -1,3 +1,4 @@
+// トップページ
 
 export default function Home() {
   return (
