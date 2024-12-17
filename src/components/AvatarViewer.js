@@ -168,7 +168,6 @@ const AvatarViewer = () => {
     scene.add(skeletonRefs.current[nextModel]);
 
     setCurrentModel(nextModel);
-    setHeightScale(1); // 切り替え時に身長スケールをリセット
   };
 
   return (
