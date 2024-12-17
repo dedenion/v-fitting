@@ -1,0 +1,13 @@
+/* page.module.css */
+.header {
+    position: absolute; /* ヘッダーをページ上部に配置 */
+    top: 0;
+    left: 0;
+    right: 0;
+    background-color: rgba(255, 255, 255, 0); /* 背景色を透明に設定 */
+    color: white; /* テキスト色を白に設定（必要に応じて変更） */
+    padding: 20px;
+    text-align: center;
+    z-index: 10; /* 他の要素より上に表示 */
+  }
+  
