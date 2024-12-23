@@ -12,7 +12,7 @@ const AvatarViewer = () => {
   const [lightIntensity, setLightIntensity] = useState(0.7);
   const [error, setError] = useState(null);
   const [isSkeletonVisible, setSkeletonVisible] = useState(false);
-  const [currentModel, setCurrentModel] = useState("female"); // 現在表示しているモデル
+  const [currentModel, setCurrentModel] = useState("man"); // 現在表示しているモデル
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -51,7 +51,7 @@ const AvatarViewer = () => {
 
     // OrbitControls
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
+    controls.enableDamping = false;
 
     // モデルを読み込む関数
     const loadModel = (modelName) => {
@@ -80,7 +80,7 @@ const AvatarViewer = () => {
           boundingBox.getCenter(center);
 
           // スケールを一定に設定
-          const scaleFactor = 1.5 / Math.max(size.x, size.y, size.z);
+          const scaleFactor = 2 / Math.max(size.x, size.y, size.z);
           model.scale.set(scaleFactor, scaleFactor, scaleFactor);
 
           // モデルをシーン中央に配置
