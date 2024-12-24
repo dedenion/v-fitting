@@ -7,7 +7,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 
 const AvatarViewer = () => {
   const canvasRef = useRef(null);
-  const modelRefs = useRef({ female: null, man: null }); // 各モデルを保持
+  const modelRefs = useRef({ female: null, man: null, clothes: [] }); // 各モデルを保持
   const skeletonRefs = useRef({ female: null, man: null }); // 各モデルのスケルトン情報を保持
   const [lightIntensity, setLightIntensity] = useState(0.7);
   const [error, setError] = useState(null);
@@ -54,36 +54,46 @@ const AvatarViewer = () => {
     controls.enableDamping = false;
 
     // モデルを読み込む関数
-    const loadModel = (modelName) => {
+    // モデルを読み込む関数
+    const loadModel = (modelName, isClothes = false) => {
       const loader = new GLTFLoader();
       loader.load(
         `/models/${modelName}.glb`,
         (gltf) => {
           const model = gltf.scene;
 
-          // スケルトンを取得
-          const skeleton = new THREE.SkeletonHelper(model);
-          skeleton.visible = isSkeletonVisible;
-
-          // ボーン名を表示
-          model.traverse((child) => {
-            if (child.isBone) {
-              console.log(`Bone name: ${child.name}`);
-            }
-          });
-
-          // スケールと位置を調整
+          // スケールと位置の調整
           const boundingBox = new THREE.Box3().setFromObject(model);
           const size = new THREE.Vector3();
           const center = new THREE.Vector3();
           boundingBox.getSize(size);
           boundingBox.getCenter(center);
 
-          // スケールを一定に設定
+          // スケールの調整
           const scaleFactor = 2 / Math.max(size.x, size.y, size.z);
           model.scale.set(scaleFactor, scaleFactor, scaleFactor);
 
+          // 衣服の位置調整（トップスとパンツ）
+          if (isClothes) {
+            if (modelName === "clothes/big_tee") {
+              model.scale.set(
+                scaleFactor * 0.6,
+                scaleFactor * 0.6,
+                scaleFactor * 0.6
+              );
+              model.position.set(0, 0.5, 0); // 上に少し調整
+            } else if (modelName === "clothes/wide_pants") {
+              model.scale.set(
+                scaleFactor * 0.6,
+                scaleFactor * 0.6,
+                scaleFactor * 0.6
+              );
+              model.position.set(0, -0.5, 0); // 下に少し調整
+            }
+          }
+
           // モデルをシーン中央に配置
+          // 今回は中心位置を計算して位置を設定
           model.position.set(
             -center.x * scaleFactor,
             -center.y * scaleFactor,
@@ -91,17 +101,28 @@ const AvatarViewer = () => {
           );
 
           // モデルを保持
-          modelRefs.current[modelName] = model;
-          skeletonRefs.current[modelName] = skeleton;
-
-          if (modelName === currentModel) {
-            scene.add(model);
-            scene.add(skeleton);
+          if (isClothes) {
+            modelRefs.current.clothes.push(model);
+          } else {
+            modelRefs.current[modelName] = model;
           }
 
-          // カメラターゲットをモデル中心に設定
-          controls.target.set(0, 0, 0);
-          controls.update();
+          // モデルをシーンに追加
+          if (modelName === currentModel || isClothes) {
+            scene.add(model);
+
+            // スケルトンがあれば追加
+            if (!isClothes && skeletonRefs.current[modelName]) {
+              scene.add(skeletonRefs.current[modelName]);
+            }
+          }
+
+          // 衣服の位置を調整するための位置変更が正しく反映されるように設定
+          if (modelName === "clothes/big_tee") {
+            model.position.set(0, -0.9, 0); // 位置の調整
+          } else if (modelName === "clothes/wide_pants") {
+            model.position.set(0, -0.9, 0); // 位置の調整
+          }
         },
         undefined,
         (error) => {
@@ -116,6 +137,10 @@ const AvatarViewer = () => {
     // 各モデルを読み込み
     loadModel("female");
     loadModel("man");
+
+    // 洋服を読み込む
+    loadModel("clothes/big_tee", true);
+    loadModel("clothes/wide_pants", true);
 
     // アニメーション
     const animate = () => {
