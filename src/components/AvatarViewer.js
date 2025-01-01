@@ -9,10 +9,10 @@ const AvatarViewer = () => {
   const canvasRef = useRef(null);
   const modelRefs = useRef({ female: null, man: null, clothes: [] }); // 各モデルを保持
   const skeletonRefs = useRef({ female: null, man: null }); // 各モデルのスケルトン情報を保持
-  const [lightIntensity, setLightIntensity] = useState(0.7);
   const [error, setError] = useState(null);
   const [isSkeletonVisible, setSkeletonVisible] = useState(false);
   const [currentModel, setCurrentModel] = useState("man"); // 現在表示しているモデル
+  const [lightIntensity, setLightIntensity] = useState(0.7); // 光の強度
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -54,7 +54,6 @@ const AvatarViewer = () => {
     controls.enableDamping = false;
 
     // モデルを読み込む関数
-    // モデルを読み込む関数
     const loadModel = (modelName, isClothes = false) => {
       const loader = new GLTFLoader();
       loader.load(
@@ -93,7 +92,6 @@ const AvatarViewer = () => {
           }
 
           // モデルをシーン中央に配置
-          // 今回は中心位置を計算して位置を設定
           model.position.set(
             -center.x * scaleFactor,
             -center.y * scaleFactor,
@@ -119,9 +117,9 @@ const AvatarViewer = () => {
 
           // 衣服の位置を調整するための位置変更が正しく反映されるように設定
           if (modelName === "clothes/big_tee") {
-            model.position.set(0, -0.9, 0); // 位置の調整
+            model.position.set(0, -0.85, 0); // 位置の調整
           } else if (modelName === "clothes/wide_pants") {
-            model.position.set(0, -0.9, 0); // 位置の調整
+            model.position.set(0, -0.9, 0.14); // 位置の調整
           }
         },
         undefined,
@@ -236,6 +234,20 @@ const AvatarViewer = () => {
       >
         {currentModel === "female" ? "Switch to Man" : "Switch to Female"}
       </button>
+      <input
+        type="range"
+        min="0"
+        max="2"
+        value={lightIntensity}
+        onChange={(e) => setLightIntensity(e.target.value)}
+        style={{
+          position: "absolute",
+          top: 50,
+          left: 10,
+          zIndex: 10,
+          padding: "5px",
+        }}
+      />
       <canvas ref={canvasRef}></canvas>
     </div>
   );
