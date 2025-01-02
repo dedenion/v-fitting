@@ -12,7 +12,7 @@ const Home: NextPage = () => {
       </header>
       <AvatarViewer />
     </div>
-  );
+  )
 };
 
 export default Home;
