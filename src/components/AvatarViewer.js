@@ -10,6 +10,7 @@ const AvatarViewer = () => {
   const modelRefs = useRef({ female: null, man: null, clothes: [] });
   const skeletonHelperRefs = useRef({ female: null, man: null });
   const controlsRef = useRef(null);
+  const lightRef = useRef(null);
   const [error, setError] = useState(null);
   const [isSkeletonVisible, setSkeletonVisible] = useState(false);
   const [currentModel, setCurrentModel] = useState("man");
@@ -22,7 +23,7 @@ const AvatarViewer = () => {
     // シーン
     const scene = new THREE.Scene();
     sceneRef.current = scene;
-    scene.background = new THREE.Color(0xffffff);
+    scene.background = new THREE.Color(0x000000); // 背景を黒に変更
 
     // サイズ
     const sizes = {
@@ -40,16 +41,42 @@ const AvatarViewer = () => {
     camera.position.z = 3;
 
     // レンダラー
-    const renderer = new THREE.WebGLRenderer({ canvas });
+    const renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+    });
     renderer.setSize(sizes.width, sizes.height);
-    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.physicallyCorrectLights = true;
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-    // ライト
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+    // ライティングセットアップ
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.2); // 環境光を弱めに
     scene.add(ambientLight);
-    const pointLight = new THREE.PointLight(0xffffff, 0.5);
-    pointLight.position.set(1, 1, 2);
-    scene.add(pointLight);
+
+    // メインの回転するライト
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 2);
+    directionalLight.position.set(2, 2, 2);
+    directionalLight.castShadow = true;
+    directionalLight.shadow.mapSize.width = 1024;
+    directionalLight.shadow.mapSize.height = 1024;
+    directionalLight.shadow.camera.near = 0.1;
+    directionalLight.shadow.camera.far = 10;
+    directionalLight.shadow.camera.left = -2;
+    directionalLight.shadow.camera.right = 2;
+    directionalLight.shadow.camera.top = 2;
+    directionalLight.shadow.camera.bottom = -2;
+    scene.add(directionalLight);
+    lightRef.current = directionalLight;
+
+    // フィルライト（反対側からの弱い光）
+    const fillLight = new THREE.DirectionalLight(0xffffff, 0.5);
+    fillLight.position.set(-2, 0, -2);
+    scene.add(fillLight);
 
     // OrbitControls
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -66,6 +93,19 @@ const AvatarViewer = () => {
         (gltf) => {
           const model = gltf.scene;
 
+          // シャドウの設定
+          model.traverse((node) => {
+            if (node.isMesh) {
+              node.castShadow = true;
+              node.receiveShadow = true;
+              // PBRマテリアルの設定
+              if (node.material) {
+                node.material.envMapIntensity = 1;
+                node.material.needsUpdate = true;
+              }
+            }
+          });
+
           // スケールと位置の調整
           const boundingBox = new THREE.Box3().setFromObject(model);
           const size = new THREE.Vector3();
@@ -81,18 +121,18 @@ const AvatarViewer = () => {
           if (isClothes) {
             if (modelName === "clothes/big_tee") {
               model.scale.set(
-                scaleFactor * 0.6,
-                scaleFactor * 0.6,
-                scaleFactor * 0.6
+                scaleFactor * 0.67,
+                scaleFactor * 0.67,
+                scaleFactor * 0.67
               );
-              model.position.set(0, -0.85, 0);
+              model.position.set(0, -1.02, -0.025);
             } else if (modelName === "clothes/wide_pants") {
               model.scale.set(
-                scaleFactor * 0.6,
-                scaleFactor * 0.6,
-                scaleFactor * 0.6
+                scaleFactor * 0.63,
+                scaleFactor * 0.63,
+                scaleFactor * 0.63
               );
-              model.position.set(0, -0.9, 0.14);
+              model.position.set(0, -0.98, 0.118);
             }
           } else {
             // モデルをシーン中央に配置（人体モデルの場合）
@@ -146,8 +186,20 @@ const AvatarViewer = () => {
     loadModel("clothes/big_tee", true);
     loadModel("clothes/wide_pants", true);
 
+    // ライトのアニメーション用の角度
+    let angle = 0;
+
     // アニメーション
     const animate = () => {
+      // ライトを回転
+      angle += 0.005;
+      const radius = 3;
+      if (lightRef.current) {
+        lightRef.current.position.x = Math.cos(angle) * radius;
+        lightRef.current.position.z = Math.sin(angle) * radius;
+        lightRef.current.lookAt(0, 0, 0);
+      }
+
       controls.update();
       renderer.render(scene, camera);
       requestAnimationFrame(animate);
@@ -161,7 +213,7 @@ const AvatarViewer = () => {
       camera.aspect = sizes.width / sizes.height;
       camera.updateProjectionMatrix();
       renderer.setSize(sizes.width, sizes.height);
-      renderer.setPixelRatio(window.devicePixelRatio);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     };
 
     window.addEventListener("resize", onResize);
@@ -214,7 +266,7 @@ const AvatarViewer = () => {
   };
 
   return (
-    <div style={{ position: "relative" }}>
+    <div style={{ position: "relative", width: "100vw", height: "100vh" }}>
       {error && (
         <div style={{ color: "red", position: "absolute", top: 10, left: 10 }}>
           {error}
@@ -254,7 +306,17 @@ const AvatarViewer = () => {
       >
         {currentModel === "female" ? "Switch to Man" : "Switch to Female"}
       </button>
-      <canvas ref={canvasRef}></canvas>
+      <canvas
+        ref={canvasRef}
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          zIndex: 0,
+          width: "100%",
+          height: "100%",
+        }}
+      ></canvas>
     </div>
   );
 };

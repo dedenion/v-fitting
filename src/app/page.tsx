@@ -7,8 +7,8 @@ const Home: NextPage = () => {
   return (
     <div>
       <header className={styles.header}>
-        <h1>バーチャルフィッティング</h1>
-        <p>アバターと服を選んで、バーチャルフィッティングを体験してください。</p>
+        {/* <h1>バーチャルフィッティング</h1>
+        <p>アバターと服を選んで、バーチャルフィッティングを体験してください。</p> */}
       </header>
       <AvatarViewer />
     </div>
