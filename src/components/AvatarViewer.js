@@ -7,12 +7,13 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 
 const AvatarViewer = () => {
   const canvasRef = useRef(null);
-  const modelRefs = useRef({ female: null, man: null, clothes: [] }); // 各モデルを保持
-  const skeletonRefs = useRef({ female: null, man: null }); // 各モデルのスケルトン情報を保持
+  const modelRefs = useRef({ female: null, man: null, clothes: [] });
+  const skeletonHelperRefs = useRef({ female: null, man: null });
+  const controlsRef = useRef(null);
   const [error, setError] = useState(null);
   const [isSkeletonVisible, setSkeletonVisible] = useState(false);
-  const [currentModel, setCurrentModel] = useState("man"); // 現在表示しているモデル
-  const [lightIntensity, setLightIntensity] = useState(0.7); // 光の強度
+  const [currentModel, setCurrentModel] = useState("man");
+  const sceneRef = useRef(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -20,6 +21,7 @@ const AvatarViewer = () => {
 
     // シーン
     const scene = new THREE.Scene();
+    sceneRef.current = scene;
     scene.background = new THREE.Color(0xffffff);
 
     // サイズ
@@ -43,7 +45,7 @@ const AvatarViewer = () => {
     renderer.setPixelRatio(window.devicePixelRatio);
 
     // ライト
-    const ambientLight = new THREE.AmbientLight(0xffffff, lightIntensity);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
     scene.add(ambientLight);
     const pointLight = new THREE.PointLight(0xffffff, 0.5);
     pointLight.position.set(1, 1, 2);
@@ -51,7 +53,10 @@ const AvatarViewer = () => {
 
     // OrbitControls
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = false;
+    controlsRef.current = controls;
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.enablePan = false;
 
     // モデルを読み込む関数
     const loadModel = (modelName, isClothes = false) => {
@@ -80,23 +85,35 @@ const AvatarViewer = () => {
                 scaleFactor * 0.6,
                 scaleFactor * 0.6
               );
-              model.position.set(0, 0.5, 0); // 上に少し調整
+              model.position.set(0, -0.85, 0);
             } else if (modelName === "clothes/wide_pants") {
               model.scale.set(
                 scaleFactor * 0.6,
                 scaleFactor * 0.6,
                 scaleFactor * 0.6
               );
-              model.position.set(0, -0.5, 0); // 下に少し調整
+              model.position.set(0, -0.9, 0.14);
             }
-          }
+          } else {
+            // モデルをシーン中央に配置（人体モデルの場合）
+            model.position.set(
+              -center.x * scaleFactor,
+              -center.y * scaleFactor,
+              -center.z * scaleFactor
+            );
 
-          // モデルをシーン中央に配置
-          model.position.set(
-            -center.x * scaleFactor,
-            -center.y * scaleFactor,
-            -center.z * scaleFactor
-          );
+            // スケルトンヘルパーの作成
+            model.traverse((node) => {
+              if (node.isMesh && node.skeleton) {
+                const helper = new THREE.SkeletonHelper(
+                  node.skeleton.bones[0].parent
+                );
+                helper.material.linewidth = 3;
+                helper.visible = isSkeletonVisible;
+                skeletonHelperRefs.current[modelName] = helper;
+              }
+            });
+          }
 
           // モデルを保持
           if (isClothes) {
@@ -108,18 +125,9 @@ const AvatarViewer = () => {
           // モデルをシーンに追加
           if (modelName === currentModel || isClothes) {
             scene.add(model);
-
-            // スケルトンがあれば追加
-            if (!isClothes && skeletonRefs.current[modelName]) {
-              scene.add(skeletonRefs.current[modelName]);
+            if (!isClothes && skeletonHelperRefs.current[modelName]) {
+              scene.add(skeletonHelperRefs.current[modelName]);
             }
-          }
-
-          // 衣服の位置を調整するための位置変更が正しく反映されるように設定
-          if (modelName === "clothes/big_tee") {
-            model.position.set(0, -0.85, 0); // 位置の調整
-          } else if (modelName === "clothes/wide_pants") {
-            model.position.set(0, -0.9, 0.14); // 位置の調整
           }
         },
         undefined,
@@ -135,8 +143,6 @@ const AvatarViewer = () => {
     // 各モデルを読み込み
     loadModel("female");
     loadModel("man");
-
-    // 洋服を読み込む
     loadModel("clothes/big_tee", true);
     loadModel("clothes/wide_pants", true);
 
@@ -164,33 +170,47 @@ const AvatarViewer = () => {
       window.removeEventListener("resize", onResize);
       controls.dispose();
     };
-  }, [lightIntensity, isSkeletonVisible, currentModel]);
+  }, []);
 
   // ボーン可視化のトグル
   const toggleSkeletonVisibility = () => {
-    setSkeletonVisible((prev) => !prev);
-    Object.values(skeletonRefs.current).forEach((skeleton) => {
+    setSkeletonVisible((prev) => {
+      const newVisibility = !prev;
+      const skeleton = skeletonHelperRefs.current[currentModel];
       if (skeleton) {
-        skeleton.visible = !isSkeletonVisible;
+        skeleton.visible = newVisibility;
       }
+      return newVisibility;
     });
   };
 
   // モデル切り替えボタンの処理
   const toggleModel = () => {
-    const scene = modelRefs.current[currentModel].parent; // 現在のモデルの親
+    const scene = sceneRef.current;
     if (!scene) return;
 
-    // 現在のモデルをシーンから削除
+    // 現在のモデルとスケルトンをシーンから削除
     scene.remove(modelRefs.current[currentModel]);
-    scene.remove(skeletonRefs.current[currentModel]);
+    if (skeletonHelperRefs.current[currentModel]) {
+      scene.remove(skeletonHelperRefs.current[currentModel]);
+    }
 
     // 次のモデルを表示
     const nextModel = currentModel === "female" ? "man" : "female";
     scene.add(modelRefs.current[nextModel]);
-    scene.add(skeletonRefs.current[nextModel]);
+
+    // スケルトンの追加（可視性を現在の状態に合わせる）
+    if (skeletonHelperRefs.current[nextModel]) {
+      scene.add(skeletonHelperRefs.current[nextModel]);
+      skeletonHelperRefs.current[nextModel].visible = isSkeletonVisible;
+    }
 
     setCurrentModel(nextModel);
+
+    // カメラの位置とコントロールをリセット
+    if (controlsRef.current) {
+      controlsRef.current.reset();
+    }
   };
 
   return (
@@ -234,20 +254,6 @@ const AvatarViewer = () => {
       >
         {currentModel === "female" ? "Switch to Man" : "Switch to Female"}
       </button>
-      <input
-        type="range"
-        min="0"
-        max="2"
-        value={lightIntensity}
-        onChange={(e) => setLightIntensity(e.target.value)}
-        style={{
-          position: "absolute",
-          top: 50,
-          left: 10,
-          zIndex: 10,
-          padding: "5px",
-        }}
-      />
       <canvas ref={canvasRef}></canvas>
     </div>
   );
