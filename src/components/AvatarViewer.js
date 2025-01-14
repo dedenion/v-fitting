@@ -221,6 +221,7 @@ const AvatarViewer = () => {
     return () => {
       window.removeEventListener("resize", onResize);
       controls.dispose();
+      renderer.dispose();
     };
   }, []);
 
@@ -279,11 +280,14 @@ const AvatarViewer = () => {
           left: 10,
           zIndex: 10,
           padding: "10px",
-          background: isSkeletonVisible ? "#f44336" : "#4caf50",
-          color: "white",
+          background: isSkeletonVisible
+            ? "rgba(255, 255, 255, 0.8)" // 白に近い透明色
+            : "rgba(0, 0, 0, 0.8)", // 黒に近い透明色
+          color: isSkeletonVisible ? "#000" : "#FFF", // テキストカラーを背景と反対に
           border: "none",
           borderRadius: "5px",
           cursor: "pointer",
+          boxShadow: "0 2px 4px rgba(0, 0, 0, 0.2)", // 見やすくするための影
         }}
         onClick={toggleSkeletonVisibility}
       >
@@ -296,16 +300,21 @@ const AvatarViewer = () => {
           left: 130,
           zIndex: 10,
           padding: "10px",
-          background: "#2196f3",
-          color: "white",
+          background:
+            currentModel === "female"
+              ? "rgba(255, 99, 71, 0.6)" // 薄い赤（女性モデル）
+              : "rgba(70, 130, 180, 0.6)", // 薄い青（男性モデル）
+          color: "#FFF",
           border: "none",
           borderRadius: "5px",
           cursor: "pointer",
+          boxShadow: "0 2px 4px rgba(0, 0, 0, 0.2)", // 影を追加
         }}
         onClick={toggleModel}
       >
-        {currentModel === "female" ? "Switch to Man" : "Switch to Female"}
+        {currentModel === "female" ? "Female" : "Man"}
       </button>
+
       <canvas
         ref={canvasRef}
         style={{
