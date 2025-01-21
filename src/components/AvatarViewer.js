@@ -28,7 +28,7 @@ const AvatarViewer = () => {
   });
 
   // 衣服のスケール状態を管理
-  const [clothingScales, setClothingScales] = useState({
+  const [clothingScales] = useState({
     big_tee: 0.67,
     wide_pants: 0.63,
   });
