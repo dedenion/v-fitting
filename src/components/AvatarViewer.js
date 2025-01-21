@@ -330,7 +330,7 @@ const AvatarViewer = () => {
       controls.dispose();
       renderer.dispose();
     };
-  }, []);
+  }, [currentModel, isSkeletonVisible]);
 
   // モデル切り替えボタンの処理
   const toggleModel = () => {
