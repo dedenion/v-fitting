@@ -28,12 +28,6 @@ const AvatarViewer = () => {
     bottoms: 100, // デフォルト着丈 100cm
   });
 
-  // 衣服のスケール状態を管理
-  const [clothingScales] = useState({
-    big_tee: 0.67,
-    wide_pants: 0.63,
-  });
-
   // 体の部位ごとの成長比率を定義
   const bodyGrowthRatios = {
     spine: 0.25, // 脊椎基本比率
