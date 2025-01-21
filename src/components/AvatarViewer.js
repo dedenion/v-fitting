@@ -16,22 +16,151 @@ const AvatarViewer = () => {
   const [currentModel, setCurrentModel] = useState("man");
   const sceneRef = useRef(null);
 
+  // 身長と衣服サイズの管理
+  const [height, setHeight] = useState({
+    man: 170,
+    female: 160,
+  });
+
+  const [clothingSizes, setClothingSizes] = useState({
+    tops: 60, // デフォルト着丈 60cm
+    bottoms: 100, // デフォルト着丈 100cm
+  });
+
+  // 衣服のスケール状態を管理
+  const [clothingScales, setClothingScales] = useState({
+    big_tee: 0.67,
+    wide_pants: 0.63,
+  });
+
+  // 体の部位ごとの成長比率を定義
+  const bodyGrowthRatios = {
+    spine: 0.25, // 脊椎基本比率
+    spine1: 0.3, // 胸部比率
+    spine2: 0.25, // 上部胸部比率
+    neck: 0.1, // 首の比率
+    head: 0.05, // 頭部比率（あまり変化させない）
+    upperArm: 0.4, // 上腕比率
+    lowerArm: 0.4, // 前腕比率
+    hand: 0.1, // 手の比率
+    upperLeg: 0.45, // 大腿比率
+    lowerLeg: 0.45, // 下腿比率
+    foot: 0.1, // 足の比率
+  };
+
+  // 身長変更を処理する関数
+  const handleHeightChange = (newHeight) => {
+    const model = modelRefs.current[currentModel];
+    if (!model) return;
+
+    // 身長の制限（±30cm）
+    const defaultHeight = currentModel === "man" ? 170 : 160;
+    newHeight = Math.max(
+      defaultHeight - 30,
+      Math.min(defaultHeight + 30, newHeight)
+    );
+
+    // 現在の身長との比率を計算
+    const scale = newHeight / defaultHeight;
+
+    // ボーンのスケーリングを適用
+    model.traverse((node) => {
+      if (node.isBone) {
+        let appliedScale = scale;
+
+        // 部位ごとの成長比率を適用
+        Object.entries(bodyGrowthRatios).forEach(([part, ratio]) => {
+          if (node.name.toLowerCase().includes(part.toLowerCase())) {
+            // 基本スケールに部位ごとの比率を掛ける
+            appliedScale = 1 + (scale - 1) * ratio;
+
+            // Y軸（長さ）に対してより大きな変化を適用
+            node.scale.y = appliedScale;
+
+            // X軸とZ軸（幅と奥行き）は若干控えめに
+            const widthScale = 1 + (appliedScale - 1) * 0.7;
+            node.scale.x = widthScale;
+            node.scale.z = widthScale;
+          }
+        });
+      }
+    });
+
+    // 状態を更新
+    setHeight((prev) => ({
+      ...prev,
+      [currentModel]: newHeight,
+    }));
+  };
+
+  // スケルトン表示切り替え関数を追加
+  const toggleSkeletonVisibility = () => {
+    setSkeletonVisible((prev) => {
+      const newVisibility = !prev;
+      // 現在のモデルのスケルトンヘルパーの表示を切り替え
+      const skeleton = skeletonHelperRefs.current[currentModel];
+      if (skeleton) {
+        skeleton.visible = newVisibility;
+      }
+      return newVisibility;
+    });
+  };
+
+  // 衣服のサイズ変更を処理する関数
+  const handleClothingSizeChange = (type, newSize) => {
+    const clothes = modelRefs.current.clothes;
+    if (!clothes.length) return;
+
+    // サイズの制限
+    const limits = {
+      tops: { min: 50, max: 80 },
+      bottoms: { min: 80, max: 120 },
+    };
+
+    newSize = Math.max(limits[type].min, Math.min(limits[type].max, newSize));
+
+    // 衣服の種類に応じたスケール計算
+    clothes.forEach((cloth) => {
+      const isTop = cloth.name.includes("big_tee");
+      if ((isTop && type === "tops") || (!isTop && type === "bottoms")) {
+        const defaultSize = type === "tops" ? 60 : 100;
+        const sizeRatio = newSize / defaultSize;
+
+        // Y軸（長さ）のスケールを調整
+        const baseScale = isTop
+          ? clothingScales.big_tee
+          : clothingScales.wide_pants;
+        cloth.scale.y = baseScale * sizeRatio;
+
+        // 着丈に応じて位置も調整
+        if (isTop) {
+          cloth.position.y = -1.02 - (newSize - defaultSize) * 0.01;
+        } else {
+          cloth.position.y = -0.98 - (newSize - defaultSize) * 0.01;
+        }
+      }
+    });
+
+    // 状態を更新
+    setClothingSizes((prev) => ({
+      ...prev,
+      [type]: newSize,
+    }));
+  };
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    // シーン
     const scene = new THREE.Scene();
     sceneRef.current = scene;
-    scene.background = new THREE.Color(0x000000); // 背景を黒に変更
+    scene.background = new THREE.Color(0x000000);
 
-    // サイズ
     const sizes = {
       width: window.innerWidth,
       height: window.innerHeight,
     };
 
-    // カメラ
     const camera = new THREE.PerspectiveCamera(
       75,
       sizes.width / sizes.height,
@@ -40,7 +169,6 @@ const AvatarViewer = () => {
     );
     camera.position.z = 3;
 
-    // レンダラー
     const renderer = new THREE.WebGLRenderer({
       canvas,
       antialias: true,
@@ -54,11 +182,9 @@ const AvatarViewer = () => {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-    // ライティングセットアップ
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.2); // 環境光を弱めに
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
     scene.add(ambientLight);
 
-    // メインの回転するライト
     const directionalLight = new THREE.DirectionalLight(0xffffff, 2);
     directionalLight.position.set(2, 2, 2);
     directionalLight.castShadow = true;
@@ -73,32 +199,28 @@ const AvatarViewer = () => {
     scene.add(directionalLight);
     lightRef.current = directionalLight;
 
-    // フィルライト（反対側からの弱い光）
     const fillLight = new THREE.DirectionalLight(0xffffff, 0.5);
     fillLight.position.set(-2, 0, -2);
     scene.add(fillLight);
 
-    // OrbitControls
     const controls = new OrbitControls(camera, renderer.domElement);
     controlsRef.current = controls;
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
     controls.enablePan = false;
 
-    // モデルを読み込む関数
     const loadModel = (modelName, isClothes = false) => {
       const loader = new GLTFLoader();
       loader.load(
         `/models/${modelName}.glb`,
         (gltf) => {
           const model = gltf.scene;
+          model.name = modelName; // モデル名を保存
 
-          // シャドウの設定
           model.traverse((node) => {
             if (node.isMesh) {
               node.castShadow = true;
               node.receiveShadow = true;
-              // PBRマテリアルの設定
               if (node.material) {
                 node.material.envMapIntensity = 1;
                 node.material.needsUpdate = true;
@@ -106,18 +228,15 @@ const AvatarViewer = () => {
             }
           });
 
-          // スケールと位置の調整
           const boundingBox = new THREE.Box3().setFromObject(model);
           const size = new THREE.Vector3();
           const center = new THREE.Vector3();
           boundingBox.getSize(size);
           boundingBox.getCenter(center);
 
-          // スケールの調整
           const scaleFactor = 2 / Math.max(size.x, size.y, size.z);
           model.scale.set(scaleFactor, scaleFactor, scaleFactor);
 
-          // 衣服の位置調整（トップスとパンツ）
           if (isClothes) {
             if (modelName === "clothes/big_tee") {
               model.scale.set(
@@ -134,15 +253,14 @@ const AvatarViewer = () => {
               );
               model.position.set(0, -0.98, 0.118);
             }
+            modelRefs.current.clothes.push(model);
           } else {
-            // モデルをシーン中央に配置（人体モデルの場合）
             model.position.set(
               -center.x * scaleFactor,
               -center.y * scaleFactor,
               -center.z * scaleFactor
             );
 
-            // スケルトンヘルパーの作成
             model.traverse((node) => {
               if (node.isMesh && node.skeleton) {
                 const helper = new THREE.SkeletonHelper(
@@ -153,16 +271,10 @@ const AvatarViewer = () => {
                 skeletonHelperRefs.current[modelName] = helper;
               }
             });
-          }
 
-          // モデルを保持
-          if (isClothes) {
-            modelRefs.current.clothes.push(model);
-          } else {
             modelRefs.current[modelName] = model;
           }
 
-          // モデルをシーンに追加
           if (modelName === currentModel || isClothes) {
             scene.add(model);
             if (!isClothes && skeletonHelperRefs.current[modelName]) {
@@ -180,18 +292,14 @@ const AvatarViewer = () => {
       );
     };
 
-    // 各モデルを読み込み
     loadModel("female");
     loadModel("man");
     loadModel("clothes/big_tee", true);
     loadModel("clothes/wide_pants", true);
 
-    // ライトのアニメーション用の角度
     let angle = 0;
 
-    // アニメーション
     const animate = () => {
-      // ライトを回転
       angle += 0.005;
       const radius = 3;
       if (lightRef.current) {
@@ -206,7 +314,6 @@ const AvatarViewer = () => {
     };
     animate();
 
-    // ブラウザのリサイズ処理
     const onResize = () => {
       sizes.width = window.innerWidth;
       sizes.height = window.innerHeight;
@@ -225,34 +332,19 @@ const AvatarViewer = () => {
     };
   }, []);
 
-  // ボーン可視化のトグル
-  const toggleSkeletonVisibility = () => {
-    setSkeletonVisible((prev) => {
-      const newVisibility = !prev;
-      const skeleton = skeletonHelperRefs.current[currentModel];
-      if (skeleton) {
-        skeleton.visible = newVisibility;
-      }
-      return newVisibility;
-    });
-  };
-
   // モデル切り替えボタンの処理
   const toggleModel = () => {
     const scene = sceneRef.current;
     if (!scene) return;
 
-    // 現在のモデルとスケルトンをシーンから削除
     scene.remove(modelRefs.current[currentModel]);
     if (skeletonHelperRefs.current[currentModel]) {
       scene.remove(skeletonHelperRefs.current[currentModel]);
     }
 
-    // 次のモデルを表示
     const nextModel = currentModel === "female" ? "man" : "female";
     scene.add(modelRefs.current[nextModel]);
 
-    // スケルトンの追加（可視性を現在の状態に合わせる）
     if (skeletonHelperRefs.current[nextModel]) {
       scene.add(skeletonHelperRefs.current[nextModel]);
       skeletonHelperRefs.current[nextModel].visible = isSkeletonVisible;
@@ -260,7 +352,6 @@ const AvatarViewer = () => {
 
     setCurrentModel(nextModel);
 
-    // カメラの位置とコントロールをリセット
     if (controlsRef.current) {
       controlsRef.current.reset();
     }
@@ -273,6 +364,7 @@ const AvatarViewer = () => {
           {error}
         </div>
       )}
+
       <button
         style={{
           position: "absolute",
@@ -281,18 +373,19 @@ const AvatarViewer = () => {
           zIndex: 10,
           padding: "10px",
           background: isSkeletonVisible
-            ? "rgba(255, 255, 255, 0.8)" // 白に近い透明色
-            : "rgba(0, 0, 0, 0.8)", // 黒に近い透明色
-          color: isSkeletonVisible ? "#000" : "#FFF", // テキストカラーを背景と反対に
+            ? "rgba(255, 255, 255, 0.8)"
+            : "rgba(0, 0, 0, 0.8)",
+          color: isSkeletonVisible ? "#000" : "#FFF",
           border: "none",
           borderRadius: "5px",
           cursor: "pointer",
-          boxShadow: "0 2px 4px rgba(0, 0, 0, 0.2)", // 見やすくするための影
+          boxShadow: "0 2px 4px rgba(0, 0, 0, 0.2)",
         }}
         onClick={toggleSkeletonVisibility}
       >
         {isSkeletonVisible ? "Hide Skeleton" : "Show Skeleton"}
       </button>
+
       <button
         style={{
           position: "absolute",
@@ -302,18 +395,96 @@ const AvatarViewer = () => {
           padding: "10px",
           background:
             currentModel === "female"
-              ? "rgba(255, 99, 71, 0.6)" // 薄い赤（女性モデル）
-              : "rgba(70, 130, 180, 0.6)", // 薄い青（男性モデル）
+              ? "rgba(255, 99, 71, 0.6)"
+              : "rgba(70, 130, 180, 0.6)",
           color: "#FFF",
           border: "none",
           borderRadius: "5px",
           cursor: "pointer",
-          boxShadow: "0 2px 4px rgba(0, 0, 0, 0.2)", // 影を追加
+          boxShadow: "0 2px 4px rgba(0, 0, 0, 0.2)",
         }}
         onClick={toggleModel}
       >
         {currentModel === "female" ? "Female" : "Man"}
       </button>
+
+      {/* 身長調整スライダー */}
+      <div
+        style={{
+          position: "absolute",
+          top: 60,
+          left: 10,
+          zIndex: 10,
+          padding: "15px",
+          background: "rgba(255, 255, 255, 0.9)",
+          borderRadius: "5px",
+          boxShadow: "0 2px 4px rgba(0, 0, 0, 0.2)",
+          width: "250px",
+        }}
+      >
+        <label style={{ display: "block", marginBottom: "5px", color: "#000" }}>
+          Height: {height[currentModel]}cm
+        </label>
+        <input
+          type="range"
+          min={currentModel === "man" ? 140 : 130}
+          max={currentModel === "man" ? 200 : 190}
+          value={height[currentModel]}
+          onChange={(e) => handleHeightChange(Number(e.target.value))}
+          style={{ width: "100%" }}
+        />
+      </div>
+
+      {/* 衣服サイズ調整パネル */}
+      <div
+        style={{
+          position: "absolute",
+          top: 150,
+          left: 10,
+          zIndex: 10,
+          padding: "15px",
+          background: "rgba(255, 255, 255, 0.9)",
+          borderRadius: "5px",
+          boxShadow: "0 2px 4px rgba(0, 0, 0, 0.2)",
+          width: "250px",
+        }}
+      >
+        <div style={{ marginBottom: "15px" }}>
+          <label
+            style={{ display: "block", marginBottom: "5px", color: "#000" }}
+          >
+            Tops Length: {clothingSizes.tops}cm
+          </label>
+          <input
+            type="range"
+            min={50}
+            max={80}
+            value={clothingSizes.tops}
+            onChange={(e) =>
+              handleClothingSizeChange("tops", Number(e.target.value))
+            }
+            style={{ width: "100%" }}
+          />
+        </div>
+
+        <div>
+          <label
+            style={{ display: "block", marginBottom: "5px", color: "#000" }}
+          >
+            Bottoms Length: {clothingSizes.bottoms}cm
+          </label>
+          <input
+            type="range"
+            min={80}
+            max={120}
+            value={clothingSizes.bottoms}
+            onChange={(e) =>
+              handleClothingSizeChange("bottoms", Number(e.target.value))
+            }
+            style={{ width: "100%" }}
+          />
+        </div>
+      </div>
 
       <canvas
         ref={canvasRef}
@@ -325,7 +496,7 @@ const AvatarViewer = () => {
           width: "100%",
           height: "100%",
         }}
-      ></canvas>
+      />
     </div>
   );
 };
